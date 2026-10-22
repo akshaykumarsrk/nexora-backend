@@ -17,6 +17,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Redis-backed fixed-window rate limiter for public authentication and password-recovery endpoints.
@@ -31,6 +33,8 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
                     "if current > tonumber(ARGV[2]) then return redis.call('TTL', KEYS[1]); end; " +
                     "return -1;", Long.class);
 
+    private static final Logger logger =
+            LoggerFactory.getLogger(AuthenticationRateLimitFilter.class);
     private final StringRedisTemplate redisTemplate;
     private final int registerLimit;
     private final int loginLimit;
@@ -79,6 +83,7 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
             retryAfter = redisTemplate.execute(
                     RATE_LIMIT_SCRIPT, List.of(key), Integer.toString(windowSeconds), Integer.toString(limit));
         } catch (RuntimeException exception) {
+            logger.error("Redis rate limiter failed for endpoint: {}", endpoint, exception);
             // Fail closed for public authentication endpoints if the shared limiter is unavailable.
             writeServiceUnavailable(response);
             return;
