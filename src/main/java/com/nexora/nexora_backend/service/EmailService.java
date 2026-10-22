@@ -1,16 +1,27 @@
+
 package com.nexora.nexora_backend.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class EmailService {
 
-    private final JavaMailSender mailSender;
+    private static final String BREVO_API_URL =
+            "https://api.brevo.com/v3/smtp/email";
+
+    private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${nexora.mail.from}")
     private String fromEmail;
@@ -21,25 +32,23 @@ public class EmailService {
     @Value("${nexora.frontend-url:http://localhost:4200}")
     private String frontendUrl;
 
+    @Value("${nexora.mail.brevo-api-key}")
+    private String brevoApiKey;
+
     public void sendVerificationEmail(
-            String recipientEmail,
-            String rawToken
-    ) {
-        String verificationUrl =
-                frontendUrl.replaceAll("/+$", "")
-                        + "/verify-email?token="
-                        + rawToken;
+            String recipientEmail, String rawToken) {
 
-        SimpleMailMessage message = new SimpleMailMessage();
+        String verificationUrl = frontendUrl.replaceAll("/+$", "")
+                + "/verify-email?token="
+                + URLEncoder.encode(rawToken, StandardCharsets.UTF_8);
 
-        message.setFrom(fromEmail);
-        message.setTo(recipientEmail);
-        message.setSubject("Verify your NEXORA email address");
-
-        message.setText("""
+        sendEmail(
+                recipientEmail,
+                "Verify your NEXORA email address",
+                """
                 Welcome to NEXORA!
 
-                Please verify your email address using the link below:
+                Please verify your email address using this link:
 
                 %s
 
@@ -49,23 +58,25 @@ public class EmailService {
 
                 Regards,
                 %s Team
-                """.formatted(verificationUrl, senderName));
-
-        mailSender.send(message);
+                """.formatted(verificationUrl, senderName)
+        );
     }
 
+    public void sendPasswordResetEmail(
+            String recipientEmail, String rawToken) {
 
-    public void sendPasswordResetEmail(String recipientEmail, String rawToken) {
-        String resetUrl = frontendUrl.replaceAll("/+$", "") + "/reset-password?token="
-                + java.net.URLEncoder.encode(rawToken, java.nio.charset.StandardCharsets.UTF_8);
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(fromEmail);
-        message.setTo(recipientEmail);
-        message.setSubject("Reset your NEXORA password");
-        message.setText("""
+        String resetUrl = frontendUrl.replaceAll("/+$", "")
+                + "/reset-password?token="
+                + URLEncoder.encode(rawToken, StandardCharsets.UTF_8);
+
+        sendEmail(
+                recipientEmail,
+                "Reset your NEXORA password",
+                """
                 We received a request to reset your NEXORA password.
 
                 Use this link within 30 minutes to choose a new password:
+
                 %s
 
                 If you did not request this, you can ignore this email.
@@ -73,8 +84,8 @@ public class EmailService {
 
                 Regards,
                 %s Team
-                """.formatted(resetUrl, senderName));
-        mailSender.send(message);
+                """.formatted(resetUrl, senderName)
+        );
     }
 
     public void sendInvitationEmail(
@@ -84,53 +95,88 @@ public class EmailService {
 
         String invitationUrl = frontendUrl.replaceAll("/+$", "")
                 + "/accept-invitation?token="
-                + java.net.URLEncoder.encode(
-                rawToken,
-                java.nio.charset.StandardCharsets.UTF_8
+                + URLEncoder.encode(rawToken, StandardCharsets.UTF_8);
+
+        sendEmail(
+                recipientEmail,
+                "Your NEXORA employee invitation",
+                """
+                You have been invited to join NEXORA as %s.
+
+                Use the link below to set your password and activate your account:
+
+                %s
+
+                This invitation expires in 24 hours and can only be used once.
+
+                If you were not expecting this invitation, you can ignore this email.
+
+                Regards,
+                %s Team
+                """.formatted(invitedRole, invitationUrl, senderName)
         );
-
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(fromEmail);
-        message.setTo(recipientEmail);
-        message.setSubject("Your NEXORA employee invitation");
-
-        message.setText("""
-        You have been invited to join NEXORA as %s.
-
-        Use the link below to set your password and activate your account:
-
-        %s
-
-        This invitation expires in 24 hours and can only be used once.
-
-        If you were not expecting this invitation, you can ignore this email.
-
-        Regards,
-        %s Team
-        """.formatted(invitedRole, invitationUrl, senderName));
-
-        mailSender.send(message);
     }
 
+    public void sendTechnicianJobAssignmentEmail(
+            String recipientEmail,
+            String jobNumber,
+            String title,
+            String scheduledAt) {
 
-    public void sendTechnicianJobAssignmentEmail(String recipientEmail, String jobNumber, String title, String scheduledAt) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(fromEmail);
-        message.setTo(recipientEmail);
-        message.setSubject("New service job assigned: " + jobNumber);
-        message.setText("""
+        sendEmail(
+                recipientEmail,
+                "New service job assigned: " + jobNumber,
+                """
                 A new service job has been assigned to you in NEXORA.
 
                 Job: %s
                 Description: %s
                 Schedule: %s
 
-                Sign in to your NEXORA technician workspace to review the assignment and job details:
+                Sign in to your NEXORA technician workspace:
                 %s/technician-dashboard
 
                 Regards,
                 %s Team
-                """.formatted(jobNumber, title == null ? "Service job" : title, scheduledAt, frontendUrl.replaceAll("/+$", ""), senderName));
-        mailSender.send(message);
+                """.formatted(
+                        jobNumber,
+                        title == null ? "Service job" : title,
+                        scheduledAt,
+                        frontendUrl.replaceAll("/+$", ""),
+                        senderName
+                )
+        );
+    }
+
+    private void sendEmail(
+            String recipientEmail,
+            String subject,
+            String textContent) {
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("api-key", brevoApiKey);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+
+        Map<String, Object> payload = Map.of(
+                "sender", Map.of(
+                        "name", senderName,
+                        "email", fromEmail
+                ),
+                "to", List.of(
+                        Map.of("email", recipientEmail)
+                ),
+                "subject", subject,
+                "textContent", textContent
+        );
+
+        HttpEntity<Map<String, Object>> request =
+                new HttpEntity<>(payload, headers);
+
+        restTemplate.postForEntity(
+                BREVO_API_URL,
+                request,
+                String.class
+        );
     }
 }
