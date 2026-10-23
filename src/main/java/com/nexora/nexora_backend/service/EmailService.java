@@ -148,6 +148,46 @@ public class EmailService {
         );
     }
 
+
+    /** Builds a simple responsive HTML wrapper for every transactional email. */
+    private String buildBrandedHtml(String textContent) {
+        String logoUrl = frontendUrl.replaceAll("/+$", "") + "/icon-192.png";
+        String safeBody = escapeHtml(textContent).replace("\r\n", "\n")
+                .replace("\r", "\n").replace("\n", "<br>\n");
+        // Keep verification, reset, invitation and workspace URLs clickable in HTML mail.
+        safeBody = safeBody.replaceAll("(https?://[^\\s<]+)",
+                "<a href=\"$1\" style=\"color:#2563eb;text-decoration:underline;overflow-wrap:anywhere;\">$1</a>");
+        String safeSender = escapeHtml(senderName);
+        return """
+                <!doctype html>
+                <html lang="en">
+                <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+                <body style="margin:0;padding:24px 12px;background:#f3f6fb;font-family:Arial,Helvetica,sans-serif;color:#172033;">
+                  <div style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;">
+                    <div style="padding:24px 28px;background:#0c1830;color:#ffffff;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+                        <td style="vertical-align:middle;padding-right:12px;"><img src="{{LOGO_URL}}" width="42" height="42" alt="NEXORA" style="display:block;border:0;border-radius:10px;"></td>
+                        <td style="vertical-align:middle;"><div style="font-size:20px;font-weight:700;letter-spacing:.4px;">NEXORA</div><div style="margin-top:4px;font-size:12px;color:#b8c7e6;">Business &amp; Field Service Management</div></td>
+                      </tr></table>
+                    </div>
+                    <div style="padding:28px;font-size:14px;line-height:1.8;overflow-wrap:anywhere;">{{BODY}}</div>
+                    <div style="padding:16px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;">Sent by {{SENDER}} · Please do not share verification or password-reset links.</div>
+                  </div>
+                </body></html>
+                """.replace("{{LOGO_URL}}", escapeHtml(logoUrl))
+                .replace("{{BODY}}", safeBody)
+                .replace("{{SENDER}}", safeSender);
+    }
+
+    private String escapeHtml(String value) {
+        if (value == null) return "";
+        return value.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
+    }
+
     private void sendEmail(
             String recipientEmail,
             String subject,
@@ -167,7 +207,8 @@ public class EmailService {
                         Map.of("email", recipientEmail)
                 ),
                 "subject", subject,
-                "textContent", textContent
+                "textContent", textContent,
+                "htmlContent", buildBrandedHtml(textContent)
         );
 
         HttpEntity<Map<String, Object>> request =

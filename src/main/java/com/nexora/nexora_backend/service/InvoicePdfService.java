@@ -135,7 +135,8 @@ public class InvoicePdfService {
 
         var organization = invoice.getOrganization();
 
-        byte[] logoBytes = brandingService.getCurrentLogoBytes();
+        byte[] logoBytes = organization == null ? null
+                : brandingService.getLogoBytesForOrganization(organization.getId());
         if (logoBytes != null) {
             try {
                 Image logo = Image.getInstance(logoBytes);

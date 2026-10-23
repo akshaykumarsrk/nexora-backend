@@ -102,7 +102,19 @@ public class OrganizationBrandingService {
     /** Returns bytes only for the authenticated organization's stored logo. */
     @Transactional(readOnly = true)
     public byte[] getCurrentLogoBytes() {
-        Organization organization = getCurrentOrganization();
+        return getLogoBytesForOrganization(organizationContext.getOrganizationId());
+    }
+
+    /**
+     * Reads a logo for a specific organization. Document generators should use
+     * the organization attached to the document rather than relying on ambient
+     * request context, so tenant branding cannot accidentally cross over.
+     */
+    @Transactional(readOnly = true)
+    public byte[] getLogoBytesForOrganization(Long organizationId) {
+        if (organizationId == null) return null;
+        Organization organization = organizationRepository.findById(organizationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Organization not found"));
         if (!organization.isUseCompanyLogo() || organization.getLogoStorageKey() == null) return null;
         Path root = Paths.get(logoDirectory).toAbsolutePath().normalize();
         Path file = root.resolve(organization.getLogoStorageKey()).normalize();
