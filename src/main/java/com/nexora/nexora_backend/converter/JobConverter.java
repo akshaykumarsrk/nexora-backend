@@ -31,6 +31,7 @@ public class JobConverter {
                 .status(technician != null ? "ASSIGNED" : "CREATED")
                 .scheduledAt(request.getScheduledAt())
                 .notes(request.getNotes())
+                .workSummary(request.getWorkSummary() == null || request.getWorkSummary().isBlank() ? null : request.getWorkSummary().trim())
                 .build();
     }
 
@@ -78,6 +79,10 @@ public class JobConverter {
         job.setTechnician(technician);
         job.setScheduledAt(request.getScheduledAt());
         job.setNotes(request.getNotes());
-        job.setWorkSummary(request.getWorkSummary());
+        // Do not erase an existing summary when a client omits the field.
+        if (request.getWorkSummary() != null) {
+            String summary = request.getWorkSummary().trim();
+            job.setWorkSummary(summary.isEmpty() ? null : summary);
+        }
     }
 }

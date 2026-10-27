@@ -1,6 +1,5 @@
 package com.nexora.nexora_backend.dto.job;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -28,7 +27,6 @@ public class JobRequest {
     @Size(max = 1000, message = "Notes must not exceed 1000 characters")
     private String notes;
 
-    @NotBlank(message = "Work summary is required")
     @Size(
             max = 2000,
             message = "Work summary must not exceed 2000 characters"

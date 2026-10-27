@@ -16,6 +16,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -201,12 +202,28 @@ public class AiAssistantService {
 
         } catch (ResponseStatusException ex) {
             throw ex;
-        } catch (RestClientException ex) {
-            log.error("Gemini API request failed: {}", ex.getMessage());
-
+        } catch (RestClientResponseException ex) {
+            // Preserve upstream diagnostics in server logs without exposing the API key.
+            String responseBody = ex.getResponseBodyAsString();
+            if (responseBody != null && responseBody.length() > 1200) {
+                responseBody = responseBody.substring(0, 1200);
+            }
+            log.error("Gemini API returned HTTP {}. Response: {}",
+                    ex.getStatusCode().value(),
+                    responseBody == null ? "(empty response body)" : responseBody);
+            String diagnostic = ex.getStatusCode().value() == 401 || ex.getStatusCode().value() == 403
+                    ? " Gemini rejected the configured API key or its permissions. Verify NEXORA_AI_API_KEY, ensure the key belongs to a Google AI Studio project with Gemini API access, and restart the backend."
+                    : " Check backend logs for the upstream error details.";
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
-                    "Gemini API request failed. Check backend logs for details."
+                    "Gemini API rejected the request (HTTP " + ex.getStatusCode().value() + ")."
+                            + diagnostic
+            );
+        } catch (RestClientException ex) {
+            log.error("Gemini API transport request failed: {}", ex.getMessage(), ex);
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Could not reach the Gemini API. Check backend network and configuration."
             );
         }
     }

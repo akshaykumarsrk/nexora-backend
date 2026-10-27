@@ -835,6 +835,16 @@ public class JobService {
 
 
         // -----------------------------------------------------
+        // Work summary required before scheduling
+        // -----------------------------------------------------
+
+        if (job.getWorkSummary() == null || job.getWorkSummary().isBlank()) {
+            throw new IllegalArgumentException(
+                    "Add a work summary or service instructions before scheduling the job"
+            );
+        }
+
+        // -----------------------------------------------------
         // Scheduled time required
         // -----------------------------------------------------
 
